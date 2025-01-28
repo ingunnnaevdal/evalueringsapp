@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # MongoDB-klient
-uri = f"mongodb+srv://ingunn:{os.getenv('MONGODB_PASSWORD')}@samiaeval.2obnm.mongodb.net/?retryWrites=true&w=majority&appName=SamiaEval"
+uri = f"mongodb+srv://ingunn:{st.secrets['MONGODB_PASSWORD']}@samiaeval.2obnm.mongodb.net/?retryWrites=true&w=majority&appName=SamiaEval"
 client = MongoClient(uri, server_api=ServerApi('1'))
 
 # Test MongoDB-tilkoblingen
