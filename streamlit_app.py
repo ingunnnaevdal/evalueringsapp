@@ -3,18 +3,43 @@ import pandas as pd
 import os
 import json
 import random
+from pymongo.mongo_client import MongoClient
+from pymongo.server_api import ServerApi
+from pymongo.collection import Collection
+from dotenv import load_dotenv
+
+# Last inn miljøvariabler
+load_dotenv()
+
+# MongoDB-klient
+uri = f"mongodb+srv://ingunn:{os.getenv('MONGODB_PASSWORD')}@samiaeval.2obnm.mongodb.net/?retryWrites=true&w=majority&appName=SamiaEval"
+client = MongoClient(uri, server_api=ServerApi('1'))
+
+# Test MongoDB-tilkoblingen
+try:
+    client.admin.command('ping')
+    print("Pinged your deployment. You successfully connected to MongoDB!")
+except Exception as e:
+    print(e)
+
+# Funksjon for å koble til MongoDB-kolleksjonen
+def hent_evaluering_kolleksjon(client) -> Collection:
+    db = client['SamiaEvalDB']  # Bytt ut med ønsket databasenavn
+    return db['evalueringer']   # Bytt ut med ønsket kollektionsnavn
+
+# Funksjon for å lagre evalueringer i MongoDB
+def lagre_evaluering_mongodb(kolleksjon, evaluering):
+    """Lagrer evalueringer i MongoDB."""
+    try:
+        kolleksjon.insert_one(evaluering)
+        print("Evaluering lagret i MongoDB!")
+    except Exception as e:
+        print(f"Feil under lagring i MongoDB: {e}")
 
 # Funksjoner for å håndtere data
-
 def les_datasett(filsti):
     """Leser inn datasettet."""
     return pd.read_csv(filsti)
-
-def last_evalueringer(filsti):
-    """Laster tidligere evalueringer hvis de finnes."""
-    if os.path.exists(filsti):
-        return pd.read_csv(filsti).to_dict(orient='records')
-    return []
 
 def last_progresjon(filsti):
     """Laster lagret progresjon hvis den finnes."""
@@ -28,39 +53,32 @@ def lagre_progresjon(filsti, data):
     with open(filsti, 'w') as f:
         json.dump(data, f)
 
-def lagre_evalueringer(filsti, evalueringer):
-    """Lagrer evalueringer til en fil som int."""
-    evaluerings_df = pd.DataFrame(evalueringer)
-
-    # Sørg for at relevante kolonner er lagret som int
-    for kol in ['koherens', 'konsistens', 'flyt', 'relevans']:
-        if kol in evaluerings_df.columns:
-            evaluerings_df[kol] = evaluerings_df[kol].dropna().astype(int)
-
-    evaluerings_df.to_csv(filsti, index=False)
-
 # Streamlit-applikasjon
 st.set_page_config(layout="wide")
 st.title("Evaluering av sammendrag")
 
 # Filstier
 filsti = 'data.csv'
-eval_fil = "evalueringer.csv"
 progresjon_fil = "progresjon.json"
+
+# Koble til MongoDB-kolleksjonen
+evaluering_kolleksjon = hent_evaluering_kolleksjon(client)
 
 # Last inn data
 data = les_datasett(filsti)
-evalueringer = last_evalueringer(eval_fil)
 progresjon = last_progresjon(progresjon_fil)
 
 # Finn startindeks basert på tidligere progresjon
-vurderte_kombinasjoner = {(e['uuid'], e['sammendrag_kilde']) for e in evalueringer}
+vurderte_kombinasjoner = {(e['uuid'], e['sammendrag_kilde']) for e in evaluering_kolleksjon.find()}
 
 # Sidebar med artikkelvalg
 st.sidebar.header("Artikler")
 if 'selected_article' not in st.session_state:
     st.session_state['selected_article'] = f'Artikkel 1'
-artikkel_valg = st.sidebar.radio("Velg en artikkel:", [f"Artikkel {i+1} {'✅' if all((data.iloc[i]['uuid'], col.replace('prompt_', '')) in vurderte_kombinasjoner for col in data.iloc[i].index if 'prompt' in col) else ''}" for i in range(len(data))])
+artikkel_valg = st.sidebar.radio(
+    "Velg en artikkel:",
+    [f"Artikkel {i+1} {'✅' if all((data.iloc[i]['uuid'], col.replace('prompt_', '')) in vurderte_kombinasjoner for col in data.iloc[i].index if 'prompt' in col) else ''}" for i in range(len(data))]
+)
 start_indeks = int(artikkel_valg.split()[1]) - 1
 
 # Hovedinnhold
@@ -104,8 +122,7 @@ for i, (kilde, tekst) in enumerate(sammendrag_liste):
                     'relevans': relevans,
                     'kommentar': kommentar
                 }
-                evalueringer.append(evaluering)
-                lagre_evalueringer(eval_fil, evalueringer)
+                lagre_evaluering_mongodb(evaluering_kolleksjon, evaluering)
                 st.success(f"Evaluering for Sammendrag {i + 1} lagret!")
                 st.session_state['selected_article'] = artikkel_valg
                 st.rerun()
@@ -119,18 +136,15 @@ beste_sammendrag = st.multiselect(
 )
 
 if st.button("Lagre beste sammendrag", key=f"lagre_beste_{start_indeks}"):
-    # Hent kilde for valgte sammendrag
     kilde_liste = [
         sammendrag_liste[int(valg.split()[1]) - 1][0] for valg in beste_sammendrag
     ]
     
-    # Lagre evaluering for beste sammendrag
     evaluering = {
         'uuid': row['uuid'],
         'sammendrag_kilde': 'Beste Sammendrag',
         'kommentar': f"Foretrukne sammendrag: {json.dumps(kilde_liste)}"
     }
     
-    evalueringer.append(evaluering)
-    lagre_evalueringer(eval_fil, evalueringer)
+    lagre_evaluering_mongodb(evaluering_kolleksjon, evaluering)
     st.success("Beste sammendrag lagret!")
