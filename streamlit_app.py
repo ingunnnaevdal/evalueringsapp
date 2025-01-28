@@ -1,151 +1,136 @@
 import streamlit as st
 import pandas as pd
-import math
-from pathlib import Path
+import os
+import json
+import random
 
-# Set the title and favicon that appear in the Browser's tab bar.
-st.set_page_config(
-    page_title='GDP dashboard',
-    page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
-)
+# Funksjoner for å håndtere data
 
-# -----------------------------------------------------------------------------
-# Declare some useful functions.
+def les_datasett(filsti):
+    """Leser inn datasettet."""
+    return pd.read_csv(filsti)
 
-@st.cache_data
-def get_gdp_data():
-    """Grab GDP data from a CSV file.
+def last_evalueringer(filsti):
+    """Laster tidligere evalueringer hvis de finnes."""
+    if os.path.exists(filsti):
+        return pd.read_csv(filsti).to_dict(orient='records')
+    return []
 
-    This uses caching to avoid having to read the file every time. If we were
-    reading from an HTTP endpoint instead of a file, it's a good idea to set
-    a maximum age to the cache with the TTL argument: @st.cache_data(ttl='1d')
-    """
+def last_progresjon(filsti):
+    """Laster lagret progresjon hvis den finnes."""
+    if os.path.exists(filsti):
+        with open(filsti, 'r') as f:
+            return json.load(f)
+    return {}
 
-    # Instead of a CSV on disk, you could read from an HTTP endpoint here too.
-    DATA_FILENAME = Path(__file__).parent/'data/gdp_data.csv'
-    raw_gdp_df = pd.read_csv(DATA_FILENAME)
+def lagre_progresjon(filsti, data):
+    """Lagrer progresjon til en fil."""
+    with open(filsti, 'w') as f:
+        json.dump(data, f)
 
-    MIN_YEAR = 1960
-    MAX_YEAR = 2022
+def lagre_evalueringer(filsti, evalueringer):
+    """Lagrer evalueringer til en fil som int."""
+    evaluerings_df = pd.DataFrame(evalueringer)
 
-    # The data above has columns like:
-    # - Country Name
-    # - Country Code
-    # - [Stuff I don't care about]
-    # - GDP for 1960
-    # - GDP for 1961
-    # - GDP for 1962
-    # - ...
-    # - GDP for 2022
-    #
-    # ...but I want this instead:
-    # - Country Name
-    # - Country Code
-    # - Year
-    # - GDP
-    #
-    # So let's pivot all those year-columns into two: Year and GDP
-    gdp_df = raw_gdp_df.melt(
-        ['Country Code'],
-        [str(x) for x in range(MIN_YEAR, MAX_YEAR + 1)],
-        'Year',
-        'GDP',
-    )
+    # Sørg for at relevante kolonner er lagret som int
+    for kol in ['koherens', 'konsistens', 'flyt', 'relevans']:
+        if kol in evaluerings_df.columns:
+            evaluerings_df[kol] = evaluerings_df[kol].dropna().astype(int)
 
-    # Convert years from string to integers
-    gdp_df['Year'] = pd.to_numeric(gdp_df['Year'])
+    evaluerings_df.to_csv(filsti, index=False)
 
-    return gdp_df
+# Streamlit-applikasjon
+st.set_page_config(layout="wide")
+st.title("Evaluering av sammendrag")
 
-gdp_df = get_gdp_data()
+# Filstier
+filsti = 'data.csv'
+eval_fil = "evalueringer.csv"
+progresjon_fil = "progresjon.json"
 
-# -----------------------------------------------------------------------------
-# Draw the actual page
+# Last inn data
+data = les_datasett(filsti)
+evalueringer = last_evalueringer(eval_fil)
+progresjon = last_progresjon(progresjon_fil)
 
-# Set the title that appears at the top of the page.
-'''
-# :earth_americas: GDP dashboard
+# Finn startindeks basert på tidligere progresjon
+vurderte_kombinasjoner = {(e['uuid'], e['sammendrag_kilde']) for e in evalueringer}
 
-Browse GDP data from the [World Bank Open Data](https://data.worldbank.org/) website. As you'll
-notice, the data only goes to 2022 right now, and datapoints for certain years are often missing.
-But it's otherwise a great (and did I mention _free_?) source of data.
-'''
+# Sidebar med artikkelvalg
+st.sidebar.header("Artikler")
+if 'selected_article' not in st.session_state:
+    st.session_state['selected_article'] = f'Artikkel 1'
+artikkel_valg = st.sidebar.radio("Velg en artikkel:", [f"Artikkel {i+1} {'✅' if all((data.iloc[i]['uuid'], col.replace('prompt_', '')) in vurderte_kombinasjoner for col in data.iloc[i].index if 'prompt' in col) else ''}" for i in range(len(data))])
+start_indeks = int(artikkel_valg.split()[1]) - 1
 
-# Add some spacing
-''
-''
+# Hovedinnhold
+row = data.iloc[start_indeks]
 
-min_value = gdp_df['Year'].min()
-max_value = gdp_df['Year'].max()
+st.header(f"Artikkel {start_indeks + 1}/{len(data)}")
+st.subheader("Artikkeltekst:")
+st.write(row['artikkeltekst'])
 
-from_year, to_year = st.slider(
-    'Which years are you interested in?',
-    min_value=min_value,
-    max_value=max_value,
-    value=[min_value, max_value])
+# Vis sammendrag
+st.subheader("Sammendrag:")
+sammendrag_dict = {col.replace('prompt_', ''): row[col] for col in row.index if 'prompt' in col}
+sammendrag_liste = list(sammendrag_dict.items())
 
-countries = gdp_df['Country Code'].unique()
+# Lagre rekkefølgen i session_state hvis den ikke allerede er satt
+if f"sammendrag_rekkefolge_{start_indeks}" not in st.session_state:
+    random.shuffle(sammendrag_liste)
+    st.session_state[f"sammendrag_rekkefolge_{start_indeks}"] = sammendrag_liste
+else:
+    sammendrag_liste = st.session_state[f"sammendrag_rekkefolge_{start_indeks}"]
 
-if not len(countries):
-    st.warning("Select at least one country")
-
-selected_countries = st.multiselect(
-    'Which countries would you like to view?',
-    countries,
-    ['DEU', 'FRA', 'GBR', 'BRA', 'MEX', 'JPN'])
-
-''
-''
-''
-
-# Filter the data
-filtered_gdp_df = gdp_df[
-    (gdp_df['Country Code'].isin(selected_countries))
-    & (gdp_df['Year'] <= to_year)
-    & (from_year <= gdp_df['Year'])
-]
-
-st.header('GDP over time', divider='gray')
-
-''
-
-st.line_chart(
-    filtered_gdp_df,
-    x='Year',
-    y='GDP',
-    color='Country Code',
-)
-
-''
-''
-
-
-first_year = gdp_df[gdp_df['Year'] == from_year]
-last_year = gdp_df[gdp_df['Year'] == to_year]
-
-st.header(f'GDP in {to_year}', divider='gray')
-
-''
-
-cols = st.columns(4)
-
-for i, country in enumerate(selected_countries):
-    col = cols[i % len(cols)]
-
-    with col:
-        first_gdp = first_year[first_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-        last_gdp = last_year[last_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-
-        if math.isnan(first_gdp):
-            growth = 'n/a'
-            delta_color = 'off'
+for i, (kilde, tekst) in enumerate(sammendrag_liste):
+    with st.expander(f"Sammendrag {i + 1}"):
+        st.write(tekst)
+        if (row['uuid'], kilde) in vurderte_kombinasjoner:
+            st.warning("✅ Dette sammendraget er allerede evaluert.")
         else:
-            growth = f'{last_gdp / first_gdp:,.2f}x'
-            delta_color = 'normal'
+            koherens = st.radio("Koherens:", [1, 2, 3, 4, 5], index=2, key=f"koherens_{start_indeks}_{i}", horizontal=True)
+            konsistens = st.radio("Konsistens:", [1, 2, 3, 4, 5], index=2, key=f"konsistens_{start_indeks}_{i}", horizontal=True)
+            flyt = st.radio("Flyt:", [1, 2, 3, 4, 5], index=2, key=f"flyt_{start_indeks}_{i}", horizontal=True)
+            relevans = st.radio("Relevans:", [1, 2, 3, 4, 5], index=2, key=f"relevans_{start_indeks}_{i}", horizontal=True)
+            kommentar = st.text_area("Kommentar:", key=f"kommentar_{start_indeks}_{i}")
 
-        st.metric(
-            label=f'{country} GDP',
-            value=f'{last_gdp:,.0f}B',
-            delta=growth,
-            delta_color=delta_color
-        )
+            if st.button(f"Lagre evaluering (Sammendrag {i + 1})", key=f"lagre_{start_indeks}_{i}"):
+                evaluering = {
+                    'uuid': row['uuid'],
+                    'sammendrag_kilde': kilde,
+                    'koherens': koherens,
+                    'konsistens': konsistens,
+                    'flyt': flyt,
+                    'relevans': relevans,
+                    'kommentar': kommentar
+                }
+                evalueringer.append(evaluering)
+                lagre_evalueringer(eval_fil, evalueringer)
+                st.success(f"Evaluering for Sammendrag {i + 1} lagret!")
+                st.session_state['selected_article'] = artikkel_valg
+                st.rerun()
+
+# Valg for beste sammendrag
+st.subheader("Beste Sammendrag")
+beste_sammendrag = st.multiselect(
+    "Hvilke sammendrag likte du best?", 
+    [f"Sammendrag {i + 1}" for i in range(len(sammendrag_liste))], 
+    key=f"beste_sammendrag_{start_indeks}"
+)
+
+if st.button("Lagre beste sammendrag", key=f"lagre_beste_{start_indeks}"):
+    # Hent kilde for valgte sammendrag
+    kilde_liste = [
+        sammendrag_liste[int(valg.split()[1]) - 1][0] for valg in beste_sammendrag
+    ]
+    
+    # Lagre evaluering for beste sammendrag
+    evaluering = {
+        'uuid': row['uuid'],
+        'sammendrag_kilde': 'Beste Sammendrag',
+        'kommentar': f"Foretrukne sammendrag: {json.dumps(kilde_liste)}"
+    }
+    
+    evalueringer.append(evaluering)
+    lagre_evalueringer(eval_fil, evalueringer)
+    st.success("Beste sammendrag lagret!")
