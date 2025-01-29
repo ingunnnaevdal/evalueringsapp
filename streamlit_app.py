@@ -10,32 +10,13 @@ from dotenv import load_dotenv
 
 st.set_page_config(layout="wide")
 
-#st.write("MONGODB_PASSWORD:", st.secrets.get("MONGODB_PASSWORD", "IKKE FUNNET"))
-
-# Last inn miljøvariabler
 load_dotenv()
-
 password = os.getenv("MONGODB_PASSWORD")
-
-# MongoDB-klient
-#uri = f"mongodb+srv://ingunn:{password}@samiaeval.2obnm.mongodb.net/?retryWrites=true&w=majority&appName=SamiaEval"
 uri = f"mongodb+srv://ingunn:{password}@samiaeval.2obnm.mongodb.net/?retryWrites=true&w=majority&tlsAllowInvalidCertificates=true"
 
 client = MongoClient(uri, server_api=ServerApi('1'))
+evaluering_kolleksjon = client['SamiaEvalDB']['evalueringer']
 
-# Test MongoDB-tilkoblingen
-try:
-    client.admin.command('ping')
-    print("Pinged your deployment. You successfully connected to MongoDB!")
-except Exception as e:
-    print(e)
-
-# Funksjon for å koble til MongoDB-kolleksjonen
-def hent_evaluering_kolleksjon(client) -> Collection:
-    db = client['SamiaEvalDB']  # Bytt ut med ønsket databasenavn
-    return db['evalueringer']   # Bytt ut med ønsket kollektionsnavn
-
-# Funksjon for å lagre evalueringer i MongoDB
 def lagre_evaluering_mongodb(kolleksjon, evaluering):
     """Lagrer evalueringer i MongoDB."""
     try:
@@ -44,68 +25,38 @@ def lagre_evaluering_mongodb(kolleksjon, evaluering):
     except Exception as e:
         print(f"Feil under lagring i MongoDB: {e}")
 
-# Funksjoner for å håndtere data
 def les_datasett(filsti):
-    """Leser inn datasettet."""
     return pd.read_csv(filsti)
 
-def last_progresjon(filsti):
-    """Laster lagret progresjon hvis den finnes."""
-    if os.path.exists(filsti):
-        with open(filsti, 'r') as f:
-            return json.load(f)
-    return {}
 
-def lagre_progresjon(filsti, data):
-    """Lagrer progresjon til en fil."""
-    with open(filsti, 'w') as f:
-        json.dump(data, f)
 
-# Streamlit-applikasjon
 st.title("Evaluering av sammendrag")
 
-# Filstier
 filsti = 'data.csv'
-progresjon_fil = "progresjon.json"
-
-# Koble til MongoDB-kolleksjonen
-evaluering_kolleksjon = hent_evaluering_kolleksjon(client)
-
-# Last inn data
 data = les_datasett(filsti)
-progresjon = last_progresjon(progresjon_fil)
 
-# Finn startindeks basert på tidligere progresjon
-vurderte_kombinasjoner = {(e['uuid'], e['sammendrag_kilde']) for e in evaluering_kolleksjon.find()}
+vurderte_kombinasjoner = {
+    (e['uuid'], e['sammendrag_kilde']) for e in 
+    evaluering_kolleksjon.find({}, {'uuid': 1, 'sammendrag_kilde': 1})
+}
 
-# Sidebar med artikkelvalg
 st.sidebar.header("Artikler")
-if 'selected_article' not in st.session_state:
-    st.session_state['selected_article'] = f'Artikkel 1'
 artikkel_valg = st.sidebar.radio(
     "Velg en artikkel:",
     [f"Artikkel {i+1} {'✅' if all((data.iloc[i]['uuid'], col.replace('prompt_', '')) in vurderte_kombinasjoner for col in data.iloc[i].index if 'prompt' in col) else ''}" for i in range(len(data))]
 )
-start_indeks = int(artikkel_valg.split()[1]) - 1
 
-# Hovedinnhold
+start_indeks = int(artikkel_valg.split()[1]) - 1
 row = data.iloc[start_indeks]
 
 st.header(f"Artikkel {start_indeks + 1}/{len(data)}")
 st.subheader("Artikkeltekst:")
 st.write(row['artikkeltekst'])
 
-# Vis sammendrag
 st.subheader("Sammendrag:")
-sammendrag_dict = {col.replace('prompt_', ''): row[col] for col in row.index if 'prompt' in col}
-sammendrag_liste = list(sammendrag_dict.items())
-
-# Lagre rekkefølgen i session_state hvis den ikke allerede er satt
-if f"sammendrag_rekkefolge_{start_indeks}" not in st.session_state:
-    random.shuffle(sammendrag_liste)
-    st.session_state[f"sammendrag_rekkefolge_{start_indeks}"] = sammendrag_liste
-else:
-    sammendrag_liste = st.session_state[f"sammendrag_rekkefolge_{start_indeks}"]
+sammendrag_liste = [(col.replace('prompt_', ''), row[col]) for col in row.index if 'prompt' in col]
+sammendrag_liste = st.session_state.get(f"sammendrag_rekkefolge_{start_indeks}", random.sample(sammendrag_liste, len(sammendrag_liste)))
+st.session_state[f"sammendrag_rekkefolge_{start_indeks}"] = sammendrag_liste
 
 for i, (kilde, tekst) in enumerate(sammendrag_liste):
     with st.expander(f"Sammendrag {i + 1}"):
@@ -134,24 +85,17 @@ for i, (kilde, tekst) in enumerate(sammendrag_liste):
                 st.session_state['selected_article'] = artikkel_valg
                 st.rerun()
 
-# Valg for beste sammendrag
 st.subheader("Beste Sammendrag")
 beste_sammendrag = st.multiselect(
     "Hvilke sammendrag likte du best?", 
-    [f"Sammendrag {i + 1}" for i in range(len(sammendrag_liste))], 
+    [f"Sammendrag {i + 1}" for i in range(len(sammendrag_liste))],
     key=f"beste_sammendrag_{start_indeks}"
 )
 
 if st.button("Lagre beste sammendrag", key=f"lagre_beste_{start_indeks}"):
-    kilde_liste = [
-        sammendrag_liste[int(valg.split()[1]) - 1][0] for valg in beste_sammendrag
-    ]
-    
-    evaluering = {
+    evaluering_kolleksjon.insert_one({
         'uuid': row['uuid'],
         'sammendrag_kilde': 'Beste Sammendrag',
-        'kommentar': f"Foretrukne sammendrag: {json.dumps(kilde_liste)}"
-    }
-    
-    lagre_evaluering_mongodb(evaluering_kolleksjon, evaluering)
+        'kommentar': f"Foretrukne sammendrag: {json.dumps([sammendrag_liste[int(valg.split()[1]) - 1][0] for valg in beste_sammendrag])}"
+    })
     st.success("Beste sammendrag lagret!")
