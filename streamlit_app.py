@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 st.set_page_config(layout="wide")
 
-st.write("MONGODB_PASSWORD:", st.secrets.get("MONGODB_PASSWORD", "IKKE FUNNET"))
+#st.write("MONGODB_PASSWORD:", st.secrets.get("MONGODB_PASSWORD", "IKKE FUNNET"))
 
 # Last inn miljøvariabler
 load_dotenv()
@@ -26,7 +26,6 @@ client = MongoClient(uri, server_api=ServerApi('1'))
 # Test MongoDB-tilkoblingen
 try:
     client.admin.command('ping')
-    st.write('tester')
     print("Pinged your deployment. You successfully connected to MongoDB!")
 except Exception as e:
     print(e)
