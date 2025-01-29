@@ -36,8 +36,8 @@ filsti = 'data.csv'
 data = les_datasett(filsti)
 
 vurderte_kombinasjoner = {
-    (e['uuid'], e['sammendrag_kilde']) for e in 
-    evaluering_kolleksjon.find({}, {'uuid': 1, 'sammendrag_kilde': 1})
+    (e['uuid'], e.get('sammendrag_kilde')) for e in 
+    evaluering_kolleksjon.find({}, {'uuid': 1, 'sammendrag_kilde': 1}) if 'sammendrag_kilde' in e
 }
 
 st.sidebar.header("Artikler")
