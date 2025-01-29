@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 password = os.getenv("MONGODB_PASSWORD")
+st.write("MONGODB_PASSWORD:", st.secrets.get("MONGODB_PASSWORD", "IKKE FUNNET"))
 
 # MongoDB-klient
 uri = f"mongodb+srv://ingunn:{password}@samiaeval.2obnm.mongodb.net/?retryWrites=true&w=majority&appName=SamiaEval"
