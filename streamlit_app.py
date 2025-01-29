@@ -8,6 +8,8 @@ from pymongo.server_api import ServerApi
 from pymongo.collection import Collection
 from dotenv import load_dotenv
 
+st.set_page_config(layout="wide")
+
 # Last inn miljøvariabler
 load_dotenv()
 
@@ -58,7 +60,6 @@ def lagre_progresjon(filsti, data):
         json.dump(data, f)
 
 # Streamlit-applikasjon
-st.set_page_config(layout="wide")
 st.title("Evaluering av sammendrag")
 
 # Filstier
