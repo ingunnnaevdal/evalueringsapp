@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 # Last inn miljøvariabler
 load_dotenv()
 
-password = st.secrets["MONGODB_PASSWORD"]
+password = os.getenv("MONGODB_PASSWORD")
 
 # MongoDB-klient
 uri = f"mongodb+srv://ingunn:{password}@samiaeval.2obnm.mongodb.net/?retryWrites=true&w=majority&appName=SamiaEval"
