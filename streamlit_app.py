@@ -51,7 +51,7 @@ row = data.iloc[start_indeks]
 
 st.header(f"Artikkel {start_indeks + 1}/{len(data)}")
 st.subheader("Artikkeltekst:")
-st.write(row['artikkeltekst'])
+st.write(row['artikkeltekst_clean'])
 
 st.subheader("Sammendrag:")
 sammendrag_liste = [(col.replace('prompt_', ''), row[col]) for col in row.index if 'prompt' in col]
