@@ -7,9 +7,14 @@ from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 from pymongo.collection import Collection
 from dotenv import load_dotenv
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+import io
+from googleapiclient.http import MediaIoBaseDownload
 
 st.set_page_config(layout="wide")
 
+# 🔹 Last inn miljøvariabler
 load_dotenv()
 password = os.getenv("MONGODB_PASSWORD")
 uri = f"mongodb+srv://ingunn:{password}@samiaeval.2obnm.mongodb.net/?retryWrites=true&w=majority&tlsAllowInvalidCertificates=true"
@@ -17,24 +22,47 @@ uri = f"mongodb+srv://ingunn:{password}@samiaeval.2obnm.mongodb.net/?retryWrites
 client = MongoClient(uri, server_api=ServerApi('1'))
 evaluering_kolleksjon = client['SamiaEvalDB']['evalueringer']
 
-def lagre_evaluering_mongodb(kolleksjon, evaluering):
-    """Lagrer evalueringer i MongoDB."""
+# 🔹 Funksjon for å hente CSV-filen fra Google Drive
+def hent_csv_fra_google_drive(file_id):
+    """Laster ned CSV-filen fra Google Drive og returnerer en Pandas DataFrame."""
     try:
-        kolleksjon.insert_one(evaluering)
-        print("Evaluering lagret i MongoDB!")
+        # 🔹 Hent Google Cloud-nøkkel fra GitHub Secrets
+        GCP_CREDENTIALS = os.getenv("GCP_CREDENTIALS")
+        credentials_dict = json.loads(GCP_CREDENTIALS)
+
+        # 🔹 Autentiser med Service Account
+        credentials = service_account.Credentials.from_service_account_info(credentials_dict)
+        drive_service = build("drive", "v3", credentials=credentials)
+
+        # 🔹 Last ned CSV-filen
+        request = drive_service.files().get_media(fileId=file_id)
+        file_data = io.BytesIO()
+        downloader = MediaIoBaseDownload(file_data, request)
+        done = False
+        while not done:
+            status, done = downloader.next_chunk()
+
+        file_data.seek(0)
+        return pd.read_csv(file_data)
+
     except Exception as e:
-        print(f"Feil under lagring i MongoDB: {e}")
+        st.error(f"Feil ved henting av CSV fra Google Drive: {e}")
+        return pd.DataFrame()
 
-def les_datasett(filsti):
-    return pd.read_csv(filsti)
-
-
+# 🔹 Google Drive-fil-ID (sett inn din egen)
+FILE_ID = "16_ZzDh4sQXp3ajIs_8coxxST_NIUq73a"
 
 st.title("Evaluering av sammendrag")
 
-filsti = 'data.csv'
-data = les_datasett(filsti)
+# 🔹 Hent data fra Google Drive
+data = hent_csv_fra_google_drive(FILE_ID)
 
+# 🔹 Sjekk at dataen er lastet inn riktig
+if data.empty:
+    st.error("Kunne ikke laste inn data. Sjekk Google Drive-fil-ID og tilgangsrettigheter.")
+    st.stop()
+
+# 🔹 Hent vurderte kombinasjoner fra MongoDB
 vurderte_kombinasjoner = {
     (e['uuid'], e.get('sammendrag_kilde')) for e in 
     evaluering_kolleksjon.find({}, {'uuid': 1, 'sammendrag_kilde': 1}) if 'sammendrag_kilde' in e
@@ -80,7 +108,7 @@ for i, (kilde, tekst) in enumerate(sammendrag_liste):
                     'relevans': relevans,
                     'kommentar': kommentar
                 }
-                lagre_evaluering_mongodb(evaluering_kolleksjon, evaluering)
+                evaluering_kolleksjon.insert_one(evaluering)
                 st.success(f"Evaluering for Sammendrag {i + 1} lagret!")
                 st.session_state['selected_article'] = artikkel_valg
                 st.rerun()
