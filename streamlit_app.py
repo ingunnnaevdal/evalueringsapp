@@ -50,7 +50,7 @@ start_indeks = int(artikkel_valg.split()[1]) - 1
 row = data.iloc[start_indeks]
 
 st.header(f"Artikkel {start_indeks + 1}/{len(data)}")
-st.markdown(f"[Les artikkelen på TV2 sine nettsider her.]({row['url']})", unsafe_allow_html=True)
+#st.markdown(f"[Les artikkelen på TV2 sine nettsider her.]({row['url']})", unsafe_allow_html=True)
 
 st.markdown(f"""
 <div class='main-container'>
