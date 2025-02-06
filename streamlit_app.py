@@ -7,6 +7,7 @@ from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 from pymongo.collection import Collection
 from dotenv import load_dotenv
+import ast
 
 st.set_page_config(layout="wide")
 
@@ -27,6 +28,15 @@ def lagre_evaluering_mongodb(kolleksjon, evaluering):
 
 def les_datasett(filsti):
     return pd.read_csv(filsti)
+
+def fix_json_and_remove_values(text):
+    try:
+        parsed = ast.literal_eval(text)
+        if isinstance(parsed, dict) and "values" in parsed:
+            parsed = parsed["values"]
+        return json.dumps(parsed, ensure_ascii=False, indent=2)
+    except (ValueError, SyntaxError):
+        return None
 
 
 
@@ -69,7 +79,14 @@ st.session_state[f"sammendrag_rekkefolge_{start_indeks}"] = sammendrag_liste
 
 for i, (kilde, tekst) in enumerate(sammendrag_liste):
     with st.expander(f"Sammendrag {i + 1}"):
-        st.write(tekst)
+        #st.write(tekst)
+
+        fixed_json = fix_json_and_remove_values(tekst)
+        if fixed_json:
+            st.json(json.loads(fixed_json))
+        else:
+            st.write(tekst)
+
         if (row['uuid'], kilde) in vurderte_kombinasjoner:
             st.warning("✅ Dette sammendraget er allerede evaluert.")
         else:
@@ -112,14 +129,14 @@ if st.button("Lagre beste sammendrag", key=f"lagre_beste_{start_indeks}"):
 st.markdown("""
     <style>
         .main-container {
-            max-width: 600px;  /* Gjør containeren smalere */
+            max-width: 800px;
             margin: auto;
             padding: 20px;
             background-color: #f9f9f9;
             border-radius: 8px;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            max-height: 500px;  /* Begrens høyden */
-            overflow-y: auto;   /* Legg til vertikal scroll */
+            max-height: 800px;
+            overflow-y: auto;
         }
         .article-title {
             font-size: 28px;
