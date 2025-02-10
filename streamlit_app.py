@@ -10,7 +10,6 @@ import ast
 
 st.set_page_config(layout="wide")
 
-# Load environment variables and connect to MongoDB
 load_dotenv()
 password = os.getenv("MONGODB_PASSWORD")
 uri = f"mongodb+srv://ingunn:{password}@samiaeval.2obnm.mongodb.net/?retryWrites=true&w=majority&tlsAllowInvalidCertificates=true"
@@ -18,7 +17,6 @@ uri = f"mongodb+srv://ingunn:{password}@samiaeval.2obnm.mongodb.net/?retryWrites
 client = MongoClient(uri, server_api=ServerApi('1'))
 evaluering_kolleksjon = client['SamiaEvalDB']['evalueringer']
 
-# Functions
 def lagre_evaluering_mongodb(kolleksjon, evaluering):
     """Lagrer evalueringer i MongoDB."""
     try:
@@ -39,13 +37,11 @@ def fix_json_and_remove_values(text):
     except (ValueError, SyntaxError):
         return None
 
-# Streamlit UI
 st.title("Evaluering av sammendrag")
 
 filsti = 'data.csv'
 data = les_datasett(filsti)
 
-# Hent alle tidligere evalueringer for artikkelen på forhånd
 vurderte_kombinasjoner = {
     (e['uuid'], e.get('sammendrag_kilde')) for e in 
     evaluering_kolleksjon.find({}, {'uuid': 1, 'sammendrag_kilde': 1}) if 'sammendrag_kilde' in e
@@ -77,47 +73,29 @@ sammendrag_liste = [(col.replace('prompt_', ''), row[col]) for col in row.index 
 sammendrag_liste = st.session_state.get(f"sammendrag_rekkefolge_{start_indeks}", random.sample(sammendrag_liste, len(sammendrag_liste)))
 st.session_state[f"sammendrag_rekkefolge_{start_indeks}"] = sammendrag_liste
 
-# Hent alle eksisterende evalueringer for denne artikkelen
 eksisterende_evalueringer = {
     e['sammendrag_kilde']: e for e in evaluering_kolleksjon.find({"uuid": row['uuid']})
 }
 
 for i, (kilde, tekst) in enumerate(sammendrag_liste):
-    with st.expander(f"Sammendrag {i + 1}"):
+    eval_key = f"evaluering_{row['uuid']}_{kilde}"
+    
+    evaluert = eval_key in st.session_state and st.session_state[eval_key]['koherens'] is not None
+
+    expander_tittel = f"Sammendrag {i + 1} {'✅' if evaluert else ''}"
+
+    with st.expander(expander_tittel):
         fixed_json = fix_json_and_remove_values(tekst)
         if fixed_json:
             st.json(json.loads(fixed_json))
         else:
             st.write(tekst)
 
-        eval_key = f"evaluering_{row['uuid']}_{kilde}"
-        
-        # Initialiser session state med eksisterende evaluering, hvis den finnes
-        if eval_key not in st.session_state:
-            eksisterende_evaluering = eksisterende_evalueringer.get(kilde)
-            if eksisterende_evaluering:
-                st.session_state[eval_key] = {
-                    'koherens': eksisterende_evaluering.get('koherens', 2),
-                    'konsistens': eksisterende_evaluering.get('konsistens', 2),
-                    'flyt': eksisterende_evaluering.get('flyt', 2),
-                    'relevans': eksisterende_evaluering.get('relevans', 2),
-                    'kommentar': eksisterende_evaluering.get('kommentar', "")
-                }
-            else:
-                st.session_state[eval_key] = {
-                    'koherens': 2,
-                    'konsistens': 2,
-                    'flyt': 2,
-                    'relevans': 2,
-                    'kommentar': ""
-                }
-
-        # Bruk session state for å vise eller redigere evalueringen
-        koherens = st.radio("Koherens:", [1, 2, 3], index=st.session_state[eval_key]['koherens'] - 1, key=f"koherens_{start_indeks}_{i}", horizontal=True)
-        konsistens = st.radio("Konsistens:", [1, 2, 3], index=st.session_state[eval_key]['konsistens'] - 1, key=f"konsistens_{start_indeks}_{i}", horizontal=True)
-        flyt = st.radio("Flyt:", [1, 2, 3], index=st.session_state[eval_key]['flyt'] - 1, key=f"flyt_{start_indeks}_{i}", horizontal=True)
-        relevans = st.radio("Relevans:", [1, 2, 3], index=st.session_state[eval_key]['relevans'] - 1, key=f"relevans_{start_indeks}_{i}", horizontal=True)
-        kommentar = st.text_area("Kommentar:", value=st.session_state[eval_key]['kommentar'], key=f"kommentar_{start_indeks}_{i}")
+        koherens = st.radio("Koherens:", [1, 2, 3], index=st.session_state[eval_key]['koherens'] - 1 if eval_key in st.session_state else 2, key=f"koherens_{start_indeks}_{i}", horizontal=True)
+        konsistens = st.radio("Konsistens:", [1, 2, 3], index=st.session_state[eval_key]['konsistens'] - 1 if eval_key in st.session_state else 2, key=f"konsistens_{start_indeks}_{i}", horizontal=True)
+        flyt = st.radio("Flyt:", [1, 2, 3], index=st.session_state[eval_key]['flyt'] - 1 if eval_key in st.session_state else 2, key=f"flyt_{start_indeks}_{i}", horizontal=True)
+        relevans = st.radio("Relevans:", [1, 2, 3], index=st.session_state[eval_key]['relevans'] - 1 if eval_key in st.session_state else 2, key=f"relevans_{start_indeks}_{i}", horizontal=True)
+        kommentar = st.text_area("Kommentar:", value=st.session_state[eval_key]['kommentar'] if eval_key in st.session_state else "", key=f"kommentar_{start_indeks}_{i}")
 
         if st.button(f"Lagre evaluering (Sammendrag {i + 1})", key=f"lagre_{start_indeks}_{i}"):
             evaluering = {
@@ -132,6 +110,7 @@ for i, (kilde, tekst) in enumerate(sammendrag_liste):
             lagre_evaluering_mongodb(evaluering_kolleksjon, evaluering)
             st.session_state[eval_key] = evaluering
             st.success(f"Evaluering for Sammendrag {i + 1} lagret!")
+
 
 st.subheader("Beste Sammendrag")
 beste_sammendrag = st.multiselect(
@@ -148,7 +127,6 @@ if st.button("Lagre beste sammendrag", key=f"lagre_beste_{start_indeks}"):
     })
     st.success("Beste sammendrag lagret!")
 
-# Styling
 st.markdown("""
     <style>
         .main-container {
