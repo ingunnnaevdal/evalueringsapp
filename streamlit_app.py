@@ -80,7 +80,7 @@ eksisterende_evalueringer = {
 for i, (kilde, tekst) in enumerate(sammendrag_liste):
     eval_key = f"evaluering_{row['uuid']}_{kilde}"
     
-    evaluert = eval_key in st.session_state and st.session_state[eval_key]['koherens'] is not None
+    evaluert = kilde in eksisterende_evalueringer
 
     expander_tittel = f"Sammendrag {i + 1} {'✅' if evaluert else ''}"
 
