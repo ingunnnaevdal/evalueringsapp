@@ -80,7 +80,7 @@ eksisterende_evalueringer = {
 for i, (kilde, tekst) in enumerate(sammendrag_liste):
     eval_key = f"evaluering_{row['uuid']}_{kilde}"
     
-    evaluert = kilde in eksisterende_evalueringer
+    evaluert = kilde in eksisterende_evalueringer  # Sjekk om sammendraget er evaluert
 
     expander_tittel = f"Sammendrag {i + 1} {'✅' if evaluert else ''}"
 
@@ -91,13 +91,48 @@ for i, (kilde, tekst) in enumerate(sammendrag_liste):
         else:
             st.write(tekst)
 
-        koherens = st.radio("Koherens:", [1, 2, 3], index=st.session_state[eval_key]['koherens'] - 1 if eval_key in st.session_state else 2, key=f"koherens_{start_indeks}_{i}", horizontal=True)
-        konsistens = st.radio("Konsistens:", [1, 2, 3], index=st.session_state[eval_key]['konsistens'] - 1 if eval_key in st.session_state else 2, key=f"konsistens_{start_indeks}_{i}", horizontal=True)
-        flyt = st.radio("Flyt:", [1, 2, 3], index=st.session_state[eval_key]['flyt'] - 1 if eval_key in st.session_state else 2, key=f"flyt_{start_indeks}_{i}", horizontal=True)
-        relevans = st.radio("Relevans:", [1, 2, 3], index=st.session_state[eval_key]['relevans'] - 1 if eval_key in st.session_state else 2, key=f"relevans_{start_indeks}_{i}", horizontal=True)
-        kommentar = st.text_area("Kommentar:", value=st.session_state[eval_key]['kommentar'] if eval_key in st.session_state else "", key=f"kommentar_{start_indeks}_{i}")
+        disabled = evaluert  # Deaktiver vurdering dersom sammendraget allerede er evaluert
 
-        if st.button(f"Lagre evaluering (Sammendrag {i + 1})", key=f"lagre_{start_indeks}_{i}"):
+        koherens = st.radio(
+            "Koherens:", [1, 2, 3], 
+            index=st.session_state[eval_key]['koherens'] - 1 if eval_key in st.session_state else 2,
+            key=f"koherens_{start_indeks}_{i}",
+            horizontal=True,
+            disabled=disabled  # Deaktiver hvis allerede evaluert
+        )
+        
+        konsistens = st.radio(
+            "Konsistens:", [1, 2, 3], 
+            index=st.session_state[eval_key]['konsistens'] - 1 if eval_key in st.session_state else 2,
+            key=f"konsistens_{start_indeks}_{i}",
+            horizontal=True,
+            disabled=disabled
+        )
+        
+        flyt = st.radio(
+            "Flyt:", [1, 2, 3], 
+            index=st.session_state[eval_key]['flyt'] - 1 if eval_key in st.session_state else 2,
+            key=f"flyt_{start_indeks}_{i}",
+            horizontal=True,
+            disabled=disabled
+        )
+        
+        relevans = st.radio(
+            "Relevans:", [1, 2, 3], 
+            index=st.session_state[eval_key]['relevans'] - 1 if eval_key in st.session_state else 2,
+            key=f"relevans_{start_indeks}_{i}",
+            horizontal=True,
+            disabled=disabled
+        )
+        
+        kommentar = st.text_area(
+            "Kommentar:", 
+            value=st.session_state[eval_key]['kommentar'] if eval_key in st.session_state else "",
+            key=f"kommentar_{start_indeks}_{i}",
+            disabled=disabled
+        )
+
+        if not evaluert and st.button(f"Lagre evaluering (Sammendrag {i + 1})", key=f"lagre_{start_indeks}_{i}"):
             evaluering = {
                 'uuid': row['uuid'],
                 'sammendrag_kilde': kilde,
