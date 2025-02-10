@@ -107,11 +107,40 @@ for i, (kilde, tekst) in enumerate(sammendrag_liste):
                     'kommentar': ""
                 }
         else:
-            koherens = st.radio("Koherens:", [1, 2, 3], index=2, key=f"koherens_{start_indeks}_{i}", horizontal=True)
-            konsistens = st.radio("Konsistens:", [1, 2, 3], index=2, key=f"konsistens_{start_indeks}_{i}", horizontal=True)
-            flyt = st.radio("Flyt:", [1, 2, 3], index=2, key=f"flyt_{start_indeks}_{i}", horizontal=True)
-            relevans = st.radio("Relevans:", [1, 2, 3], index=2, key=f"relevans_{start_indeks}_{i}", horizontal=True)
-            kommentar = st.text_area("Kommentar:", key=f"kommentar_{start_indeks}_{i}")
+            koherens = st.radio(
+                "Koherens:", [1, 2, 3], 
+                index=st.session_state[eval_key]['koherens'] - 1, 
+                key=f"koherens_{start_indeks}_{i}", 
+                horizontal=True
+            )
+
+            konsistens = st.radio(
+                "Konsistens:", [1, 2, 3], 
+                index=st.session_state[eval_key]['konsistens'] - 1, 
+                key=f"konsistens_{start_indeks}_{i}", 
+                horizontal=True
+            )
+
+            flyt = st.radio(
+                "Flyt:", [1, 2, 3], 
+                index=st.session_state[eval_key]['flyt'] - 1, 
+                key=f"flyt_{start_indeks}_{i}", 
+                horizontal=True
+            )
+
+            relevans = st.radio(
+                "Relevans:", [1, 2, 3], 
+                index=st.session_state[eval_key]['relevans'] - 1, 
+                key=f"relevans_{start_indeks}_{i}", 
+                horizontal=True
+            )
+
+            kommentar = st.text_area(
+                "Kommentar:", 
+                value=st.session_state[eval_key]['kommentar'], 
+                key=f"kommentar_{start_indeks}_{i}"
+            )
+
 
             if st.button(f"Lagre evaluering (Sammendrag {i + 1})", key=f"lagre_{start_indeks}_{i}"):
                 evaluering = {
@@ -124,9 +153,13 @@ for i, (kilde, tekst) in enumerate(sammendrag_liste):
                     'kommentar': kommentar
                 }
                 lagre_evaluering_mongodb(evaluering_kolleksjon, evaluering)
+                
+                # Oppdater session state
+                st.session_state[eval_key] = evaluering
+                
                 st.success(f"Evaluering for Sammendrag {i + 1} lagret!")
-                st.session_state['selected_article'] = artikkel_valg
                 st.rerun()
+
 
 st.subheader("Beste Sammendrag")
 beste_sammendrag = st.multiselect(
