@@ -87,13 +87,30 @@ for i, (kilde, tekst) in enumerate(sammendrag_liste):
         else:
             st.write(tekst)
 
-        if (row['uuid'], kilde) in vurderte_kombinasjoner:
-            st.warning("✅ Dette sammendraget er allerede evaluert.")
+        eval_key = f"evaluering_{row['uuid']}_{kilde}"
+        if eval_key not in st.session_state:
+            eksisterende_evaluering = evaluering_kolleksjon.find_one({"uuid": row['uuid'], "sammendrag_kilde": kilde})
+            if eksisterende_evaluering:
+                st.session_state[eval_key] = {
+                    'koherens': eksisterende_evaluering.get('koherens', 2),
+                    'konsistens': eksisterende_evaluering.get('konsistens', 2),
+                    'flyt': eksisterende_evaluering.get('flyt', 2),
+                    'relevans': eksisterende_evaluering.get('relevans', 2),
+                    'kommentar': eksisterende_evaluering.get('kommentar', "")
+                }
+            else:
+                st.session_state[eval_key] = {
+                    'koherens': 2,
+                    'konsistens': 2,
+                    'flyt': 2,
+                    'relevans': 2,
+                    'kommentar': ""
+                }
         else:
-            koherens = st.radio("Koherens:", [1, 2, 3, 4, 5], index=2, key=f"koherens_{start_indeks}_{i}", horizontal=True)
-            konsistens = st.radio("Konsistens:", [1, 2, 3, 4, 5], index=2, key=f"konsistens_{start_indeks}_{i}", horizontal=True)
-            flyt = st.radio("Flyt:", [1, 2, 3, 4, 5], index=2, key=f"flyt_{start_indeks}_{i}", horizontal=True)
-            relevans = st.radio("Relevans:", [1, 2, 3, 4, 5], index=2, key=f"relevans_{start_indeks}_{i}", horizontal=True)
+            koherens = st.radio("Koherens:", [1, 2, 3], index=2, key=f"koherens_{start_indeks}_{i}", horizontal=True)
+            konsistens = st.radio("Konsistens:", [1, 2, 3], index=2, key=f"konsistens_{start_indeks}_{i}", horizontal=True)
+            flyt = st.radio("Flyt:", [1, 2, 3], index=2, key=f"flyt_{start_indeks}_{i}", horizontal=True)
+            relevans = st.radio("Relevans:", [1, 2, 3], index=2, key=f"relevans_{start_indeks}_{i}", horizontal=True)
             kommentar = st.text_area("Kommentar:", key=f"kommentar_{start_indeks}_{i}")
 
             if st.button(f"Lagre evaluering (Sammendrag {i + 1})", key=f"lagre_{start_indeks}_{i}"):
