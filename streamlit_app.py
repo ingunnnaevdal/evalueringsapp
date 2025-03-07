@@ -69,7 +69,11 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 st.subheader("Sammendrag:")
-sammendrag_liste = [(col.replace('prompt_', ''), row[col]) for col in row.index if 'prompt' in col]
+sammendrag_liste = [
+    (col.replace('prompt_', ''), row[col])
+    for col in row.index
+    if 'prompt' in col and pd.notna(row[col])
+]
 sammendrag_liste = st.session_state.get(f"sammendrag_rekkefolge_{start_indeks}", random.sample(sammendrag_liste, len(sammendrag_liste)))
 st.session_state[f"sammendrag_rekkefolge_{start_indeks}"] = sammendrag_liste
 
