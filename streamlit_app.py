@@ -50,7 +50,14 @@ vurderte_kombinasjoner = {
 st.sidebar.header("Artikler")
 artikkel_valg = st.sidebar.radio(
     "Velg en artikkel:",
-    [f"Artikkel {i+1} {'✅' if all((data.iloc[i]['uuid'], col.replace('prompt_', '')) in vurderte_kombinasjoner for col in data.iloc[i].index if 'prompt' in col) else ''}" for i in range(len(data))]
+    [
+        f"Artikkel {i+1} {'✅' if all(
+            (data.iloc[i]['uuid'], col.replace('prompt_', '')) in vurderte_kombinasjoner
+            for col in data.iloc[i].index
+            if 'prompt' in col and pd.notna(data.iloc[i][col])
+        ) else ''}"
+        for i in range(len(data))
+    ]
 )
 
 start_indeks = int(artikkel_valg.split()[1]) - 1
